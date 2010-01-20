@@ -3,7 +3,7 @@ import smpp_parts as part
 import asyncore
 import socket
 import binascii
-import struct
+import time
 
 class Header(object):
     def __init__(self, command_id = None, 
@@ -226,34 +226,33 @@ class Client(asyncore.dispatcher):
         self.bind = bind
         self.send_buf = ''
         self.recv_buf = ''
-
+        self.sequence_number = 0
+        self.enquire_time = 0
         
     def handle_connect(self):
-
-        self.send(binascii.unhexlify(self.bind.format_message()))
-
+        self.bind.sequence_number(self.sequence_number)
+        self.send(binascii.a2b_hex(self.bind.format_message()))
+        self.sequence_number += 1
+        self.enquire_time = time.time()
 
     def handle_close(self):
         self.close()
 
     def handle_read(self):
         data = self.recv(4)
-        length = struct.unpack('>L', data)[0]
+        length = int(binascii.b2a_hex(data),16)
         raw_pdu = self.recv(length - 4)
-        a = data+raw_pdu
+        a = data + raw_pdu
         print binascii.b2a_hex(a)
 
-
-
     def handle_write(self):
-        count = 12
-        self.send(binascii.unhexlify(EnquireLink(count).format_message()))
-        
+        if time.time() - self.enquire_time >= 10:
+            self.send(binascii.unhexlify(EnquireLink(self.sequence_number).format_message()))
+            self.sequence_number +=1
+            self.enquire_time = time.time()
 
 
 
-        
-   
 if __name__ == '__main__':
 
     bind = BindTransmitter(10, system_id = 'denis', password = 'buga', addr_npi = 1, addr_ton = 2)
