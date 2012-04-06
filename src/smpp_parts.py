@@ -1,79 +1,58 @@
 import smpp_const
+import functools
 
-class CommandLength(object):
         
-    def __call__(self, param_order):
-        return hex(sum([len(i) for i in param_order])+16).replace('0x', '').zfill(8)
+def command_length(param_order):
+    return hex(sum([len(i) for i in param_order])+16).replace('0x', '').zfill(8)
 
-class CommandID(object):
-    #Must check if is a valid command_id
-    def __init__(self, value):
-        self._value = value
-        
-    def __call__(self, value = None):
-        if value == None:
-            return self._value
-        else:
-            self._value = value
+def generic_value_check(values, value):
+    if value in values:
+        return value
+
+    else:
+        raise ValueError
+
+command_id = functools.partial(generic_value_check, part.command_id)
+command_status = functools.partial(generic_value_check, part.command_status)
+
+def sequence_number(value):
+    return hex(value).replace('0x', '').zfill(8)
             
-class CommandStatus(object):
-    #Must check if is a valid command_status
-    def __init__(self, value):
-        self._value = value
-        
-    def __call__(self, value = None):
-        if value == None:
-            return self._value
-        else:
-            self._value = value
-            
-class SequenceNumber(object):
-    def __init__(self, value):
-        self._value = hex(value).replace('0x', '').zfill(8)
-        
-    def __call__(self, value = None):
-        if value == None:
-            return self._value
-        else:
-            self._value = hex(value).replace('0x', '').zfill(8)
+def set_string_parameter(max_size, min_size, name, self, value):
+    value = value.encode('hex')
 
-class Parameter(object):
-    def __init__(self, type_, value, max_size, min_size = 0):
-        self.type = type_
-        self.max_size = max_size
-        self.min_size = min_size
-        self.set_value = {'string':self._string_parser,
-                          'int':self._int_parser,
-                          'bit':self._bit_parser}.get(type_)
-        self.set_value(value)
-    
-    def _string_parser(self, value):
-        self._value = value.encode('hex')
+    if len(value) > max_size:
+            raise ValueError('Cannot exceed %s characters' % (max_size))
 
-        if len(self._value) > self.max_size:
-            raise ValueError(self.__class__.__name__+' cannot exceed '+str(self.max_size)+' characters')
-        elif len(self._value) < self.min_size:
-            raise ValueError(self.__class__.__name__+' cannot be less than '+str(self.max_size)+' characters')
-        self._value = '%s00' % (self._value)        
-        
-    def _int_parser(self, value):
-        self._value = hex(value).replace('0x', '').zfill(2)
-        if len(self._value) > self.max_size:
-            raise ValueError(self.__class__.__name__+' cannot exceed 255 as value (00 - ff)')
-        
-    def _bit_parser(self, value):
-        self._value = value.zfill(2)
-        if self._value not in ('00', '01', '10', '11'):
-            raise ValueError(self.__class__.__name__+' Bit mask wrong value')
-    
-    def __len__(self):
-        return len(self._value)/2
-        
-    def __call__(self, value = None):
-        if value == None:
-            return self._value
-        else:
-            self.set_value(value)
+    elif len(value) < min_size:
+            raise ValueError('Cannot be less than %s characters' % (min_size))
+
+    setattr(self, name, '%s00' % (value))
+
+def get_string_parameter(name, self):
+    return getattr(self, name).decode('hex')
+
+def set_int_parameter(max_size, name, self, value):
+    value = hex(value).replace('0x', '').zfill(2)
+    if len(value) > max_size:
+        raise ValueError('Cannot exceed 255 as value (00 - ff): %s' % (value))
+
+    setattr(self, name, value)
+
+def get_int_parameter(name, self):
+    return int(getattr(self, name), 16)
+
+
+def set_bit_parameter(max_size, name, self, value):
+    value = value.zfill(2)
+    if value not in ('00', '01', '10', '11'):
+        raise ValueError('Bit mask wrong value: %s' % (value))
+
+    setattr(self, name, value)
+
+def get_bit_parameter(name, self):
+    return getattr(self, name)
+
 
 class IntParameter(Parameter):
     def __init__(self, value):
@@ -103,91 +82,66 @@ class TLV(object):
             self.value(value)
             self.length = len(self.value)
 
-            
-class SystemID(Parameter):
-    def __init__(self, value):
-        Parameter.__init__(self, 'string', value, 32)
-    
-class Password(Parameter):
-    def __init__(self, value):
-        Parameter.__init__(self, 'string', value, 18)
-    
-class SystemType(Parameter):
-    def __init__(self, value):
-        Parameter.__init__(self, 'string', value, 26)
-        
-class InterfaceVersion(IntParameter):
-    pass
+#To be used as properties to build the top objects
+#I know looks bizarre... but will avoid a lot code to be done
+#I know:
+#Beautiful is better than ugly.
+#Explicit is better than implicit.
+#Simple is better than complex.
+#Complex is better than complicated.
+set_system_id = functools.partial(set_string_parameter, 32, 0, '_system_id')
+set_password = functools.partial(set_string_parameter, 18, 0, '_password')
+set_system_type = functools.partial(set_string_parameter, 26, 0, '_system_type')
+set_interface_version = functools.partial(set_int_parameter, 2, '_interface_version')
+set_addr_ton = functools.partial(set_int_parameter, 2, '_addr_ton')
+set_addr_npi = functools.partial(set_int_parameter, 2, '_addr_npi')
+set_address_range = functools.partial(set_string_parameter, 82, 0, '_address_range')
+set_service_type = functools.partial(set_string_parameter, 12, 0, '_service_type')
+set_source_addr_ton = functools.partial(set_int_parameter, 2, '_source_addr_ton')
+set_source_addr_npi = functools.partial(set_int_parameter, 2, '_source_addr_npi')
+set_source_addr = functools.partial(set_string_parameter, 42, 0, '_source_addr')
+set_dest_addr_ton = functools.partial(set_int_parameter, 2, '_dest_addr_ton')
+set_dest_addr_npi = functools.partial(set_int_parameter, 2, '_dest_addr_npi')
+set_dest_addr = functools.partial(set_string_parameter, 42, 0, '_dest_add')
+set_esm_class = functools.partial(set_int_parameter, 2, '_esm_class')
+set_protocol_id = functools.partial(set_int_parameter, 2, '_protocol_id')
+set_priority_flag = functools.partial(set_int_parameter, 2, '_priority_flag')
+set_schedule_delivery_time = functools.partial(set_string_parameter, 34, 2, '_schedule_delivery_time')
+set_validity_period = functools.partial(set_string_parameter, 34, 2, '_validity_period')
+set_registered_delivery = functools.partial(set_int_parameter, 2, '_registered_delivery')
+set_replace_if_present_flag = functools.partial(set_int_parameter, 2, '_replace_if_present_flag')
+set_data_coding = functools.partial(set_int_parameter, 2, '_data_coding')
+set_sm_default_msg_id = functools.partial(set_int_parameter, 2, '_sm_default_msg_id')
+set_sm_length = functools.partial(set_int_parameter, 2, '_sm_length')
+set_short_message = functools.partial(set_string_parameter, 508, 0, '_short_message')
 
-class AddrTon(IntParameter):
-    pass
+get_system_id = functools.partial(get_string_parameter, '_system_id')
+get_password = functools.partial(get_string_parameter, '_password')
+get_system_type = functools.partial(get_string_parameter,'_system_type')
+get_interface_version = functools.partial(get_int_parameter,'_interface_version')
+get_addr_ton = functools.partial(get_int_parameter, '_addr_ton')
+get_addr_npi = functools.partial(get_int_parameter, '_addr_npi')
+get_address_range = functools.partial(get_string_parameter, '_address_range')
+get_service_type = functools.partial(get_string_parameter, '_service_type')
+get_source_addr_ton = functools.partial(get_int_parameter, '_source_addr_ton')
+get_source_addr_npi = functools.partial(get_int_parameter, '_source_addr_npi')
+get_source_addr = functools.partial(get_string_parameter, '_source_addr')
+get_dest_addr_ton = functools.partial(get_int_parameter, '_dest_addr_ton')
+get_dest_addr_npi = functools.partial(get_int_parameter, '_dest_addr_npi')
+get_dest_addr = functools.partial(get_string_parameter, '_dest_add')
+get_esm_class = functools.partial(get_int_parameter, '_esm_class')
+get_protocol_id = functools.partial(get_int_parameter, '_protocol_id')
+get_priority_flag = functools.partial(get_int_parameter, '_priority_flag')
+get_schedule_delivery_time = functools.partial(get_string_parameter, '_schedule_delivery_time')
+get_validity_period = functools.partial(get_string_parameter, '_validity_period')
+get_registered_delivery = functools.partial(get_int_parameter, '_registered_delivery')
+get_replace_if_present_flag = functools.partial(get_int_parameter, '_replace_if_present_flag')
+get_data_coding = functools.partial(get_int_parameter, '_data_coding')
+get_sm_default_msg_id = functools.partial(get_int_parameter, '_sm_default_msg_id')
+get_sm_length = functools.partial(get_int_parameter, '_sm_length')
+get_short_message = functools.partial(get_string_parameter, '_short_message')
 
-class AddrNpi(IntParameter):
-    pass       
-        
-class AddressRange(Parameter):
-    def __init__(self, value):
-        Parameter.__init__(self, 'string', value, 82)
 
-class ServiceType(Parameter):
-    def __init__(self, value):
-        Parameter.__init__(self, 'string', value, 12)
-        
-class SourceAddrTon(IntParameter):
-    pass
-        
-class SourceAddrNpi(IntParameter):
-    pass
-        
-class SourceAddr(Parameter):
-    def __init__(self, value):
-        Parameter.__init__(self, 'string', value, 42)
-
-class DestAddrTon(IntParameter):
-    pass
-        
-class DestAddrNpi(IntParameter):
-    pass
-
-class DestinationAddr(Parameter):
-    def __init__(self, value):
-        Parameter.__init__(self, 'string', value, 42)
-
-class EsmClass(IntParameter):
-    pass
-        
-class ProtocolID(IntParameter):
-    pass
-        
-class PriorityFlag(IntParameter):
-    pass
-
-class ScheduleDeliveryTime(Parameter):
-    def __init__(self, value):
-        Parameter.__init__(self, 'string', value, 34, min_size = 2)
-
-class ValidityPeriod(Parameter):
-    def __init__(self, value):
-        Parameter.__init__(self, 'string', value, 34, min_size = 2)
-
-class RegisteredDelivery(IntParameter):
-    pass
-        
-class ReplaceIfPresentFlag(IntParameter):
-    pass
-
-class DataCoding(IntParameter):
-    pass
-
-class SmDefaultMsgID(IntParameter):
-    pass
-        
-class SmLength(IntParameter):
-    pass
-
-class ShortMessage(Parameter):
-    def __init__(self, value):
-        Parameter.__init__(self, 'string', value, 508)
         
 class DestAddrSubunit(TLV):
     def __init__(self, value):
