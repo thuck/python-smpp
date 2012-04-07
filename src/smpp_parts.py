@@ -1,23 +1,29 @@
 import smpp_const
 import functools
 
-        
-def command_length(param_order):
-    return hex(sum([len(i) for i in param_order])+16).replace('0x', '').zfill(8)
 
-def generic_value_check(values, value):
+def set_command_length(self, param_order):
+    self._command_length = hex(sum([len(i) for i in param_order]) + 16).replace('0x', '').zfill(8)
+
+def get_command_length(self):
+    return int(self._command_length, 16)
+
+def generic_value_check(values, name, self, value):
     if value in values:
-        return value
+        setattr(self, name, value)
 
     else:
         raise ValueError
 
-command_id = functools.partial(generic_value_check, part.command_id)
-command_status = functools.partial(generic_value_check, part.command_status)
+command_id = functools.partial(generic_value_check, part.command_id, '_command_id')
+command_status = functools.partial(generic_value_check, part.command_status, '_command_status')
 
-def sequence_number(value):
-    return hex(value).replace('0x', '').zfill(8)
-            
+def set_sequence_number(self, value):
+     self._sequence_number = hex(value).replace('0x', '').zfill(8)
+
+def get_sequence_number(self)
+    return int(self._sequence_number, 16)
+
 def set_string_parameter(max_size, min_size, name, self, value):
     value = value.encode('hex')
 
@@ -30,7 +36,7 @@ def set_string_parameter(max_size, min_size, name, self, value):
     setattr(self, name, '%s00' % (value))
 
 def get_string_parameter(name, self):
-    return getattr(self, name).decode('hex')
+    return getattr(self, name)[:-2].decode('hex')
 
 def set_int_parameter(max_size, name, self, value):
     value = hex(value).replace('0x', '').zfill(2)
@@ -54,10 +60,6 @@ def get_bit_parameter(name, self):
     return getattr(self, name)
 
 
-class IntParameter(Parameter):
-    def __init__(self, value):
-        Parameter.__init__(self, 'int', value, 2)
-    
 class TLV(object):
     def __init__(self, parameter_tag, type_, value, max_size, min_size = 0):
         
