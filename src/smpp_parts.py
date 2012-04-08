@@ -1,53 +1,66 @@
-import smpp_const
+import smpp_const as const
 import functools
 
+def smpp_values_validation(name, value):
+    try:
+        if value in getattr(const, name[1:]):
+            return True
 
-def set_command_length(self, param_order):
-    self._command_length = hex(sum([len(i) for i in param_order]) + 16).replace('0x', '').zfill(8)
+        else:
+            return False
 
-def get_command_length(self):
-    return int(self._command_length, 16)
+    except AttributeError:
+        #if there is no validator, any value is possible
+        return True
 
-def generic_value_check(values, name, self, value):
-    if value in values:
-        setattr(self, name, value)
+def set_string_parameter(max_size, min_size, default_value, type_, name, self, value):
+    if value is None:
+        value = default_value
 
-    else:
-        raise ValueError
-
-command_id = functools.partial(generic_value_check, part.command_id, '_command_id')
-command_status = functools.partial(generic_value_check, part.command_status, '_command_status')
-
-def set_sequence_number(self, value):
-     self._sequence_number = hex(value).replace('0x', '').zfill(8)
-
-def get_sequence_number(self)
-    return int(self._sequence_number, 16)
-
-def set_string_parameter(max_size, min_size, name, self, value):
     value = value.encode('hex')
 
     if len(value) > max_size:
-            raise ValueError('Cannot exceed %s characters' % (max_size))
+        raise ValueError('Cannot exceed %s characters' % (max_size/2))
 
     elif len(value) < min_size:
-            raise ValueError('Cannot be less than %s characters' % (min_size))
+        raise ValueError('Cannot be less than %s characters' % (min_size/2))
 
-    setattr(self, name, '%s00' % (value))
+    elif not smpp_values_validation(name, value):
+        raise ValueError('%s is not a valid value for %s' % (value, name))
 
-def get_string_parameter(name, self):
-    return getattr(self, name)[:-2].decode('hex')
+    if type_ == 'c-octet_string':
+        setattr(self, name, '%s00' % (value))
 
-def set_int_parameter(max_size, name, self, value):
-    value = hex(value).replace('0x', '').zfill(2)
+    elif type_ == 'octet_string':
+        setattr(self, name, value)
+
+def get_string_parameter(name, type_, self):
+    value = ''
+
+    if type_ == 'c-octet_string':
+        value = getattr(self, name)[:-2].decode('hex')
+
+    elif type_ == 'octet_string':
+        value = getattr(self, name).decode('hex')
+
+    return value
+
+def set_int_parameter(max_size, default_value, name, self, value):
+    if value is None:
+        value = default_value
+
+    value = hex(value).replace('0x', '').zfill(max_size)
+
     if len(value) > max_size:
-        raise ValueError('Cannot exceed 255 as value (00 - ff): %s' % (value))
+        raise ValueError('Cannot exceed %s: %s' % (max_size, value))
+
+    elif not smpp_values_validation(name, value):
+        raise ValueError('%s is not a valid value for %s' % (value, name))
 
     setattr(self, name, value)
 
 def get_int_parameter(name, self):
     return int(getattr(self, name), 16)
-
 
 def set_bit_parameter(max_size, name, self, value):
     value = value.zfill(2)
@@ -60,9 +73,85 @@ def get_bit_parameter(name, self):
     return getattr(self, name)
 
 
+#To be used as properties to build the top objects
+#I know looks bizarre... but will avoid a lot code to be done
+#I know:
+#Beautiful is better than ugly.
+#Explicit is better than implicit.
+#Simple is better than complex.
+#Complex is better than complicated.
+
+#SMPP Header
+set_command_length = functools.partial(set_int_parameter, 8, 0, 'command_length')
+set_command_id = functools.partial(set_int_parameter, 8, 0, '_command_id')
+set_command_status = functools.partial(set_int_parameter, 8, 0, '_command_status')
+set_sequence_number = functools.partial(set_int_parameter, 8, 0, 'sequence_number')
+
+#SMPP mandatory parameters
+set_system_id = functools.partial(set_string_parameter, 32, 0, '', 'c-octet_string', '_system_id')
+set_password = functools.partial(set_string_parameter, 18, 0, '', 'c-octet_string','_password')
+set_system_type = functools.partial(set_string_parameter, 26, 0, '', 'c-octet_string', '_system_type')
+set_interface_version = functools.partial(set_int_parameter, 2, 52, '_interface_version')
+set_addr_ton = functools.partial(set_int_parameter, 2, 0, '_addr_ton')
+set_addr_npi = functools.partial(set_int_parameter, 2, 0, '_addr_npi')
+set_address_range = functools.partial(set_string_parameter, 82, 0, '', 'c-octet_string', '_address_range')
+set_service_type = functools.partial(set_string_parameter, 12, 0, '', 'c-octet_string', '_service_type')
+set_source_addr_ton = functools.partial(set_int_parameter, 2, 0, '_source_addr_ton')
+set_source_addr_npi = functools.partial(set_int_parameter, 2, 0, '_source_addr_npi')
+set_source_addr = functools.partial(set_string_parameter, 42, 0, '', 'c-octet_string', '_source_addr')
+set_dest_addr_ton = functools.partial(set_int_parameter, 2, 0, '_dest_addr_ton')
+set_dest_addr_npi = functools.partial(set_int_parameter, 2, 0, '_dest_addr_npi')
+set_dest_addr = functools.partial(set_string_parameter, 42, 0, '', 'c-octet_string', '_dest_add')
+set_esm_class = functools.partial(set_int_parameter, 2, 0, '_esm_class')
+set_protocol_id = functools.partial(set_int_parameter, 2, 0, '_protocol_id')
+set_priority_flag = functools.partial(set_int_parameter, 2, 0, '_priority_flag')
+set_schedule_delivery_time = functools.partial(set_string_parameter, 34, 2, '', 'c-octet_string', '_schedule_delivery_time')
+set_validity_period = functools.partial(set_string_parameter, 34, 2, '', 'c-octet_string', '_validity_period')
+set_registered_delivery = functools.partial(set_int_parameter, 2, 0, '_registered_delivery')
+set_replace_if_present_flag = functools.partial(set_int_parameter, 2, 0, '_replace_if_present_flag')
+set_data_coding = functools.partial(set_int_parameter, 2, 0, '_data_coding')
+set_sm_default_msg_id = functools.partial(set_int_parameter, 2, 0, '_sm_default_msg_id')
+set_sm_length = functools.partial(set_int_parameter, 2, 0, '_sm_length')
+set_short_message = functools.partial(set_string_parameter, 508, 0, '', 'octet_string', '_short_message')
+
+#SMPP Header
+get_command_length = functools.partial(get_int_parameter, 'command_length')
+get_command_id = functools.partial(get_int_parameter, '_command_id')
+get_command_status = functools.partial(get_int_parameter, '_command_status')
+get_sequence_number = functools.partial(get_int_parameter, 'sequence_number')
+
+#SMPP mandatory parameters
+get_system_id = functools.partial(get_string_parameter, 'c-octet_string', '_system_id')
+get_password = functools.partial(get_string_parameter, 'c-octet_string', '_password')
+get_system_type = functools.partial(get_string_parameter,'c-octet_string', '_system_type')
+get_interface_version = functools.partial(get_int_parameter,'_interface_version')
+get_addr_ton = functools.partial(get_int_parameter, '_addr_ton')
+get_addr_npi = functools.partial(get_int_parameter, '_addr_npi')
+get_address_range = functools.partial(get_string_parameter, 'c-octet_string', '_address_range')
+get_service_type = functools.partial(get_string_parameter, 'c-octet_string', '_service_type')
+get_source_addr_ton = functools.partial(get_int_parameter, '_source_addr_ton')
+get_source_addr_npi = functools.partial(get_int_parameter, '_source_addr_npi')
+get_source_addr = functools.partial(get_string_parameter, 'c-octet_string', '_source_addr')
+get_dest_addr_ton = functools.partial(get_int_parameter, '_dest_addr_ton')
+get_dest_addr_npi = functools.partial(get_int_parameter, '_dest_addr_npi')
+get_dest_addr = functools.partial(get_string_parameter, 'c-octet_string', '_dest_add')
+get_esm_class = functools.partial(get_int_parameter, '_esm_class')
+get_protocol_id = functools.partial(get_int_parameter, '_protocol_id')
+get_priority_flag = functools.partial(get_int_parameter, '_priority_flag')
+get_schedule_delivery_time = functools.partial(get_string_parameter, 'c-octet_string', '_schedule_delivery_time')
+get_validity_period = functools.partial(get_string_parameter, 'c-octet_string', '_validity_period')
+get_registered_delivery = functools.partial(get_int_parameter, '_registered_delivery')
+get_replace_if_present_flag = functools.partial(get_int_parameter, '_replace_if_present_flag')
+get_data_coding = functools.partial(get_int_parameter, '_data_coding')
+get_sm_default_msg_id = functools.partial(get_int_parameter, '_sm_default_msg_id')
+get_sm_length = functools.partial(get_int_parameter, '_sm_length')
+get_short_message = functools.partial(get_string_parameter, 'octet_string', '_short_message')
+
+
+
 class TLV(object):
     def __init__(self, parameter_tag, type_, value, max_size, min_size = 0):
-        
+
         self.parameter_tag = parameter_tag
         if value:
             self.value = Parameter(type_, value, max_size, min_size)
@@ -76,74 +165,13 @@ class TLV(object):
             return 4 + self.length
         else:
             return 0
-        
+
     def __call__(self, value = None):
         if value == None:
             return '%s%s%s' % (self.parameter_tag, hex(len(self.value)).replace('0x', '').zfill(4), self.value())
         else:
             self.value(value)
             self.length = len(self.value)
-
-#To be used as properties to build the top objects
-#I know looks bizarre... but will avoid a lot code to be done
-#I know:
-#Beautiful is better than ugly.
-#Explicit is better than implicit.
-#Simple is better than complex.
-#Complex is better than complicated.
-set_system_id = functools.partial(set_string_parameter, 32, 0, '_system_id')
-set_password = functools.partial(set_string_parameter, 18, 0, '_password')
-set_system_type = functools.partial(set_string_parameter, 26, 0, '_system_type')
-set_interface_version = functools.partial(set_int_parameter, 2, '_interface_version')
-set_addr_ton = functools.partial(set_int_parameter, 2, '_addr_ton')
-set_addr_npi = functools.partial(set_int_parameter, 2, '_addr_npi')
-set_address_range = functools.partial(set_string_parameter, 82, 0, '_address_range')
-set_service_type = functools.partial(set_string_parameter, 12, 0, '_service_type')
-set_source_addr_ton = functools.partial(set_int_parameter, 2, '_source_addr_ton')
-set_source_addr_npi = functools.partial(set_int_parameter, 2, '_source_addr_npi')
-set_source_addr = functools.partial(set_string_parameter, 42, 0, '_source_addr')
-set_dest_addr_ton = functools.partial(set_int_parameter, 2, '_dest_addr_ton')
-set_dest_addr_npi = functools.partial(set_int_parameter, 2, '_dest_addr_npi')
-set_dest_addr = functools.partial(set_string_parameter, 42, 0, '_dest_add')
-set_esm_class = functools.partial(set_int_parameter, 2, '_esm_class')
-set_protocol_id = functools.partial(set_int_parameter, 2, '_protocol_id')
-set_priority_flag = functools.partial(set_int_parameter, 2, '_priority_flag')
-set_schedule_delivery_time = functools.partial(set_string_parameter, 34, 2, '_schedule_delivery_time')
-set_validity_period = functools.partial(set_string_parameter, 34, 2, '_validity_period')
-set_registered_delivery = functools.partial(set_int_parameter, 2, '_registered_delivery')
-set_replace_if_present_flag = functools.partial(set_int_parameter, 2, '_replace_if_present_flag')
-set_data_coding = functools.partial(set_int_parameter, 2, '_data_coding')
-set_sm_default_msg_id = functools.partial(set_int_parameter, 2, '_sm_default_msg_id')
-set_sm_length = functools.partial(set_int_parameter, 2, '_sm_length')
-set_short_message = functools.partial(set_string_parameter, 508, 0, '_short_message')
-
-get_system_id = functools.partial(get_string_parameter, '_system_id')
-get_password = functools.partial(get_string_parameter, '_password')
-get_system_type = functools.partial(get_string_parameter,'_system_type')
-get_interface_version = functools.partial(get_int_parameter,'_interface_version')
-get_addr_ton = functools.partial(get_int_parameter, '_addr_ton')
-get_addr_npi = functools.partial(get_int_parameter, '_addr_npi')
-get_address_range = functools.partial(get_string_parameter, '_address_range')
-get_service_type = functools.partial(get_string_parameter, '_service_type')
-get_source_addr_ton = functools.partial(get_int_parameter, '_source_addr_ton')
-get_source_addr_npi = functools.partial(get_int_parameter, '_source_addr_npi')
-get_source_addr = functools.partial(get_string_parameter, '_source_addr')
-get_dest_addr_ton = functools.partial(get_int_parameter, '_dest_addr_ton')
-get_dest_addr_npi = functools.partial(get_int_parameter, '_dest_addr_npi')
-get_dest_addr = functools.partial(get_string_parameter, '_dest_add')
-get_esm_class = functools.partial(get_int_parameter, '_esm_class')
-get_protocol_id = functools.partial(get_int_parameter, '_protocol_id')
-get_priority_flag = functools.partial(get_int_parameter, '_priority_flag')
-get_schedule_delivery_time = functools.partial(get_string_parameter, '_schedule_delivery_time')
-get_validity_period = functools.partial(get_string_parameter, '_validity_period')
-get_registered_delivery = functools.partial(get_int_parameter, '_registered_delivery')
-get_replace_if_present_flag = functools.partial(get_int_parameter, '_replace_if_present_flag')
-get_data_coding = functools.partial(get_int_parameter, '_data_coding')
-get_sm_default_msg_id = functools.partial(get_int_parameter, '_sm_default_msg_id')
-get_sm_length = functools.partial(get_int_parameter, '_sm_length')
-get_short_message = functools.partial(get_string_parameter, '_short_message')
-
-
         
 class DestAddrSubunit(TLV):
     def __init__(self, value):
@@ -151,7 +179,7 @@ class DestAddrSubunit(TLV):
 
 class SourceAddrSubunit(TLV):
     def __init__(self, value):
-        TLV.__init__(self, smpp_const.SOURCE_ADDR_SUBUNIT, 'int', value, 2)    
+        TLV.__init__(self, smpp_const.SOURCE_ADDR_SUBUNIT, 'int', value, 2)
 
 class DestNetworkType(TLV):
     def __init__(self, value):

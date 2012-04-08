@@ -14,7 +14,7 @@ class Header(object):
         self.sequence_number = part.SequenceNumber(sequence_number)
         self.body = []
         self.optional_parameter = []
-        
+
     def format_message(self):
         message = ''
         full_body = self.body[:]
@@ -33,7 +33,41 @@ class Header(object):
                 
         return message
 
-        
+class BindTransmitter(object):
+    __parameters = ['_command_length', '_command_id', '_command_status',
+                    '_sequence_number', '_system_id', '_password',
+                    '_system_type', '_interface_version', '_addr_ton',
+                    '_addr_npi', '_address_range']
+
+    __optional_parameters = []
+
+    __slots__ = __parameters + __optional_parameters
+
+    def __init__(self, **kargs):
+        self.command_id = smpp_const.BIND_TRANSMITTER
+        self.command_status = smpp_const.ESME_ROK
+        self.sequence_number = kargs.get('sequence_number')
+        self.system_id =  kargs.get('system_id')
+        self.password = kargs.get('password')
+        self.system_type = kargs.get('system_type')
+        self.interface_version = kargs.get('interface_version')
+        self.addr_ton = kargs.get('addr_ton')
+        self.addr_npi = kargs.get('addr_npi')
+        self.address_range = kargs.get('address_range')
+        self.command_length = kargs.get('command_length', self.__slots__)
+
+    command_length = property(part.get_command_length, part.set_command_length)
+    command_id = property(part.get_command_id, part.set_command_id)
+    command_status = property(part.get_command_status, part.set_command_status)
+    sequence_number = property(part.get_sequence_number, part.set_sequence_number)
+    system_id = property(part.get_system_id, part.set_system_id)
+    password = property(part.get_password, part.set_password)
+    system_type = property(part.get_system_type, part.set_system_type)
+    interface_version = property(part.get_interface_version, part.set_interface_version)
+    addr_ton = property(part.get_addr_ton, part.set_addr_ton)
+    addr_npi = property(part.get_addr_npi, part.set_addr_npi)
+    address_range = property(part.get_address_range, part.set_address_range)
+
 class BindTransmitter(Header):
     def __init__(self, sequence_numb, system_id = '', password = '',
                        system_type = '', interface_version = 52,
