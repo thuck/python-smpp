@@ -19,10 +19,10 @@ def set_string_parameter(max_size, min_size, default_value, type_, name, self, v
 
     value = value.encode('hex')
 
-    if len(value) > max_size:
+    if len(value) > max_size - 2:
         raise ValueError('Cannot exceed %s characters' % (max_size/2))
 
-    elif len(value) < min_size:
+    elif len(value) < min_size - 2:
         raise ValueError('Cannot be less than %s characters' % (min_size/2))
 
     elif not smpp_values_validation(name, value):
@@ -34,7 +34,7 @@ def set_string_parameter(max_size, min_size, default_value, type_, name, self, v
     elif type_ == 'octet_string':
         setattr(self, name, value)
 
-def get_string_parameter(name, type_, self):
+def get_string_parameter(type_, name, self):
     value = ''
 
     if type_ == 'c-octet_string':
@@ -46,10 +46,15 @@ def get_string_parameter(name, type_, self):
     return value
 
 def set_int_parameter(max_size, default_value, name, self, value):
+
     if value is None:
         value = default_value
 
-    value = hex(value).replace('0x', '').zfill(max_size)
+    if type(value) is str:
+        value = value.zfill(max_size)
+
+    else:
+        value = hex(value).replace('0x', '').zfill(max_size)
 
     if len(value) > max_size:
         raise ValueError('Cannot exceed %s: %s' % (max_size, value))
@@ -59,8 +64,9 @@ def set_int_parameter(max_size, default_value, name, self, value):
 
     setattr(self, name, value)
 
+
 def get_int_parameter(name, self):
-    return int(getattr(self, name), 16)
+    return int(getattr(self, name),16)
 
 def set_bit_parameter(max_size, name, self, value):
     value = value.zfill(2)
@@ -72,6 +78,24 @@ def set_bit_parameter(max_size, name, self, value):
 def get_bit_parameter(name, self):
     return getattr(self, name)
 
+def set_command_length(self, value):
+    length = 0
+    for i in self._parameters[1:]:
+        length += len(getattr(self, i))
+
+    for i in self._optional_parameters:
+        length += len(getattr(self, i))
+
+    self._command_length = hex((length+8)/2).replace('0x','').zfill(8)
+
+def get_command_length(self):
+    return int(self._command_length, 16)
+
+def set_sm_length(self, value):
+    self._sm_length = hex(len(self._short_message)/2).replace('0x','').zfill(2)
+
+def get_sm_length(self):
+    return int(hex(len(self._short_message)/2).replace('0x','').zfill(2), 16)
 
 #To be used as properties to build the top objects
 #I know looks bizarre... but will avoid a lot code to be done
@@ -82,10 +106,10 @@ def get_bit_parameter(name, self):
 #Complex is better than complicated.
 
 #SMPP Header
-set_command_length = functools.partial(set_int_parameter, 8, 0, 'command_length')
+#set_command_length = functools.partial(set_int_parameter, 8, 0, '_command_length')
 set_command_id = functools.partial(set_int_parameter, 8, 0, '_command_id')
 set_command_status = functools.partial(set_int_parameter, 8, 0, '_command_status')
-set_sequence_number = functools.partial(set_int_parameter, 8, 0, 'sequence_number')
+set_sequence_number = functools.partial(set_int_parameter, 8, 0, '_sequence_number')
 
 #SMPP mandatory parameters
 set_system_id = functools.partial(set_string_parameter, 32, 0, '', 'c-octet_string', '_system_id')
@@ -101,7 +125,7 @@ set_source_addr_npi = functools.partial(set_int_parameter, 2, 0, '_source_addr_n
 set_source_addr = functools.partial(set_string_parameter, 42, 0, '', 'c-octet_string', '_source_addr')
 set_dest_addr_ton = functools.partial(set_int_parameter, 2, 0, '_dest_addr_ton')
 set_dest_addr_npi = functools.partial(set_int_parameter, 2, 0, '_dest_addr_npi')
-set_dest_addr = functools.partial(set_string_parameter, 42, 0, '', 'c-octet_string', '_dest_add')
+set_dest_addr = functools.partial(set_string_parameter, 42, 0, '', 'c-octet_string', '_dest_addr')
 set_esm_class = functools.partial(set_int_parameter, 2, 0, '_esm_class')
 set_protocol_id = functools.partial(set_int_parameter, 2, 0, '_protocol_id')
 set_priority_flag = functools.partial(set_int_parameter, 2, 0, '_priority_flag')
@@ -111,14 +135,14 @@ set_registered_delivery = functools.partial(set_int_parameter, 2, 0, '_registere
 set_replace_if_present_flag = functools.partial(set_int_parameter, 2, 0, '_replace_if_present_flag')
 set_data_coding = functools.partial(set_int_parameter, 2, 0, '_data_coding')
 set_sm_default_msg_id = functools.partial(set_int_parameter, 2, 0, '_sm_default_msg_id')
-set_sm_length = functools.partial(set_int_parameter, 2, 0, '_sm_length')
+#set_sm_length = functools.partial(set_int_parameter, 2, 0, '_sm_length')
 set_short_message = functools.partial(set_string_parameter, 508, 0, '', 'octet_string', '_short_message')
 
 #SMPP Header
-get_command_length = functools.partial(get_int_parameter, 'command_length')
+#get_command_length = functools.partial(get_int_parameter, '_command_length')
 get_command_id = functools.partial(get_int_parameter, '_command_id')
 get_command_status = functools.partial(get_int_parameter, '_command_status')
-get_sequence_number = functools.partial(get_int_parameter, 'sequence_number')
+get_sequence_number = functools.partial(get_int_parameter, '_sequence_number')
 
 #SMPP mandatory parameters
 get_system_id = functools.partial(get_string_parameter, 'c-octet_string', '_system_id')
@@ -134,7 +158,7 @@ get_source_addr_npi = functools.partial(get_int_parameter, '_source_addr_npi')
 get_source_addr = functools.partial(get_string_parameter, 'c-octet_string', '_source_addr')
 get_dest_addr_ton = functools.partial(get_int_parameter, '_dest_addr_ton')
 get_dest_addr_npi = functools.partial(get_int_parameter, '_dest_addr_npi')
-get_dest_addr = functools.partial(get_string_parameter, 'c-octet_string', '_dest_add')
+get_dest_addr = functools.partial(get_string_parameter, 'c-octet_string', '_dest_addr')
 get_esm_class = functools.partial(get_int_parameter, '_esm_class')
 get_protocol_id = functools.partial(get_int_parameter, '_protocol_id')
 get_priority_flag = functools.partial(get_int_parameter, '_priority_flag')
@@ -144,7 +168,7 @@ get_registered_delivery = functools.partial(get_int_parameter, '_registered_deli
 get_replace_if_present_flag = functools.partial(get_int_parameter, '_replace_if_present_flag')
 get_data_coding = functools.partial(get_int_parameter, '_data_coding')
 get_sm_default_msg_id = functools.partial(get_int_parameter, '_sm_default_msg_id')
-get_sm_length = functools.partial(get_int_parameter, '_sm_length')
+#get_sm_length = functools.partial(get_int_parameter, '_sm_length')
 get_short_message = functools.partial(get_string_parameter, 'octet_string', '_short_message')
 
 
