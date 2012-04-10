@@ -218,24 +218,50 @@ class GenericNack(Header):
                                command_status = command_stat,
                                sequence_number = sequence_numb)
 
-class SubmitSM(Header):
-    def __init__(self, sequence_numb,
-                 dest_addr_ton,  dest_addr_npi,
-                 destination_addr, esm_class,
-                 protocol_id, priority_flag,
-                 registered_delivery, replace_if_present_flag,
-                 data_coding, sm_length, short_message,
-                 
-                 service_type = smpp_const.ESME_ROK,
-                 source_addr_ton = 0, source_addr_npi = 0,
-                 source_addr = '', schedule_delivery_time = '',
-                 validity_period = '', sm_default_msg_id = 0,
-                 
-                 ):
-        Header.__init__(self, command_id = smpp_const.SUBMIT_SM,
-                               command_status = smpp_const.ESME_ROK,
-                               sequence_number = sequence_numb)
-        self.service_type  = part.ServiceType(service_type)
+class SubmitSM(object):
+    _parameters = ['_command_length', '_command_id', '_command_status',
+                    '_sequence_number', '_service_type', '_source_addr_ton',
+                    '_source_addr_npi', '_source_addr', '_dest_addr_ton',
+                    '_dest_addr_npi', '_dest_addr', '_esm_class',
+                    '_protocol_id', '_priority_flag', '_schedule_delivery_time',
+                    '_validity_period', '_registered_delivery',
+                    '_replace_if_present_flag', '_data_coding',
+                    '_sm_default_msg_id', '_sm_length', '_short_message']
+
+    _optional_parameters = []
+
+    __slots__ = _parameters + _optional_parameters
+
+    def __init__(self, **kargs):
+        for i in self._parameters[4:]:
+            setattr(self, i[1:], kargs.get(i[1:]))
+        self.command_id = smpp_const.SUBMIT_SM
+        self.command_status = smpp_const.ESME_ROK
+        self.sequence_number = kargs.get('sequence_number')
+        self.command_length = 0
+
+    command_length = property(part.get_command_length, part.set_command_length)
+    command_id = property(part.get_command_id, part.set_command_id)
+    command_status = property(part.get_command_status, part.set_command_status)
+    sequence_number = property(part.get_sequence_number, part.set_sequence_number)
+    service_type = property(part.get_service_type, part.set_service_type)
+    source_addr_ton = property(part.get_source_addr_ton, part.set_source_addr_ton)
+    source_addr_npi = property(part.get_source_addr_npi, part.set_source_addr_npi)
+    source_addr = property(part.get_source_addr, part.set_source_addr)
+    dest_addr_ton = property(part.get_dest_addr_ton, part.set_dest_addr_ton)
+    dest_addr_npi = property(part.get_dest_addr_npi, part.set_dest_addr_npi)
+    dest_addr = property(part.get_dest_addr, part.set_dest_addr)
+    esm_class = property(part.get_esm_class, part.set_esm_class)
+    protocol_id = property(part.get_protocol_id, part.set_protocol_id)
+    priority_flag = property(part.get_priority_flag, part.set_priority_flag)
+    schedule_delivery_time = property(part.get_schedule_delivery_time, part.set_schedule_delivery_time)
+    validity_period = property(part.get_validity_period, part.set_validity_period)
+    registered_delivery = property(part.get_registered_delivery, part.set_registered_delivery)
+    replace_if_present_flag = property(part.get_replace_if_present_flag, part.set_replace_if_present_flag)
+    data_coding = property(part.get_data_coding, part.set_data_coding)
+    sm_default_msg_id = property(part.get_sm_default_msg_id, part.set_sm_default_msg_id)
+    sm_length = property(part.get_sm_length, part.set_sm_length)
+    short_message = property(part.get_short_message, part.set_short_message)
 
 
 class EnquireLink(Header):
@@ -251,56 +277,3 @@ class EnquireLinkResp(Header):
                                 command_status = smpp_const.ESME_ROK,
                                 sequence_number = sequence_numb)
 
-
-class Client(asyncore.dispatcher):
-    def __init__(self, host, port, bind):
-        asyncore.dispatcher.__init__(self)
-        self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.connect( (host, port) )
-        self.bind = bind
-        self.send_buf = ''
-        self.recv_buf = ''
-        self.sequence_number = 0
-        self.enquire_time = 0
-        
-    def handle_connect(self):
-        self.bind.sequence_number(self.sequence_number)
-        self.send(binascii.a2b_hex(self.bind.format_message()))
-        self.sequence_number += 1
-        self.enquire_time = time.time()
-
-    def handle_close(self):
-        self.close()
-
-    def handle_read(self):
-        data = self.recv(4)
-        length = int(binascii.b2a_hex(data),16)
-        raw_pdu = self.recv(length - 4)
-        a = data + raw_pdu
-        print binascii.b2a_hex(a)
-
-    def handle_write(self):
-        if time.time() - self.enquire_time >= 10:
-            self.send(binascii.unhexlify(EnquireLink(self.sequence_number).format_message()))
-            self.sequence_number +=1
-            self.enquire_time = time.time()
-
-
-
-if __name__ == '__main__':
-
-    bind = BindTransmitter(10, system_id = 'denis', password = 'buga', addr_npi = 1, addr_ton = 2)
-    #print BindTransmitterResp(10).format_message()
-    #print BindReceiver(10, system_id = 'denis', password = 'buga', addr_npi = 1, addr_ton = 2).format_message()
-    #print BindReceiverResp(10, sc_interface_version = 52).format_message()
-    #print BindTranceiver(10, system_id = 'denis', password = 'buga', addr_npi = 1, addr_ton = 2).format_message()
-    #print BindTranceiverResp(10, command_stat = smpp_const.ESME_RBINDFAIL, sc_interface_version = 52).format_message()
-    #print OutBind(10, password = 'buga').format_message()
-    #print UnBind(10).format_message()
-    #print UnBindResp(10).format_message()
-    #print GenericNack(smpp_const.ESME_RALYBND, 10).format_message()
-    
-    client = Client('localhost', 8003, bind)
-    
-
-    asyncore.loop()

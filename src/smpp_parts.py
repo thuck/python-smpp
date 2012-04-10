@@ -3,7 +3,7 @@ import functools
 
 def smpp_values_validation(name, value):
     try:
-        if value in getattr(const, name[1:]):
+        if value in getattr(const, name):
             return True
 
         else:
@@ -34,6 +34,14 @@ def set_string_parameter(max_size, min_size, default_value, type_, name, self, v
     elif type_ == 'octet_string':
         setattr(self, name, value)
 
+    if name == '_short_message':
+        #this will update the short message size, for every change in the
+        #short message; any value is ignored
+        self.sm_length = 0 #hex(len(self._short_message)/2).replace('0x','').zfill(2)
+
+    self.command_length = 0
+
+
 def get_string_parameter(type_, name, self):
     value = ''
 
@@ -50,11 +58,7 @@ def set_int_parameter(max_size, default_value, name, self, value):
     if value is None:
         value = default_value
 
-    if type(value) is str:
-        value = value.zfill(max_size)
-
-    else:
-        value = hex(value).replace('0x', '').zfill(max_size)
+    value = hex(int(value)).replace('0x', '').zfill(max_size)
 
     if len(value) > max_size:
         raise ValueError('Cannot exceed %s: %s' % (max_size, value))
@@ -66,7 +70,7 @@ def set_int_parameter(max_size, default_value, name, self, value):
 
 
 def get_int_parameter(name, self):
-    return int(getattr(self, name),16)
+    return int(getattr(self, name), 16)
 
 def set_bit_parameter(max_size, name, self, value):
     value = value.zfill(2)
@@ -78,13 +82,23 @@ def set_bit_parameter(max_size, name, self, value):
 def get_bit_parameter(name, self):
     return getattr(self, name)
 
+
+#Special parameters
 def set_command_length(self, value):
     length = 0
     for i in self._parameters[1:]:
-        length += len(getattr(self, i))
+        if hasattr(self, i):
+            length += len(getattr(self, i))
+
+        else:
+            break
 
     for i in self._optional_parameters:
-        length += len(getattr(self, i))
+        if hasattr(self, i):
+            length += len(getattr(self, i))
+
+        else:
+            length += 0
 
     self._command_length = hex((length+8)/2).replace('0x','').zfill(8)
 
@@ -92,10 +106,16 @@ def get_command_length(self):
     return int(self._command_length, 16)
 
 def set_sm_length(self, value):
-    self._sm_length = hex(len(self._short_message)/2).replace('0x','').zfill(2)
+    try:
+        self._sm_length = hex(len(self._short_message)/2).replace('0x','').zfill(2)
+
+    except AttributeError:
+        self._sm_length = value
 
 def get_sm_length(self):
     return int(hex(len(self._short_message)/2).replace('0x','').zfill(2), 16)
+
+#End of special parameters
 
 #To be used as properties to build the top objects
 #I know looks bizarre... but will avoid a lot code to be done
@@ -172,6 +192,30 @@ get_sm_default_msg_id = functools.partial(get_int_parameter, '_sm_default_msg_id
 get_short_message = functools.partial(get_string_parameter, 'octet_string', '_short_message')
 
 
+#(name, length, value)
+
+def set_tlv_length(tag, self, value):
+    setattr(self, name, hex(len(getattr(self, tag))/2).replace('0x','').zfill(2))
+
+def get_tlv_length(tag, self):
+    return int(hex(len(getattr(self, tag))/2).replace('0x','').zfill(2), 16)
+
+set_tag_name = functools.partial(set_int_parameter, 2, 0, '_tag_name')
+get_tag_name = functools.partial(get_int_parameter, '_tag_name')
+
+
+class TLV(object):
+    def __init__(self, name):
+        self.name = name
+
+    name = property(get_tag_name, set_tag_name)
+
+    def __len__(self):
+        return self.length + 4
+
+    def format_message(self):
+        return '%s%s%s' % (self.name, self.length, self.value)
+
 
 class TLV(object):
     def __init__(self, parameter_tag, type_, value, max_size, min_size = 0):
@@ -196,7 +240,7 @@ class TLV(object):
         else:
             self.value(value)
             self.length = len(self.value)
-        
+
 class DestAddrSubunit(TLV):
     def __init__(self, value):
         TLV.__init__(self, smpp_const.DEST_ADDR_SUBUNIT, 'int', value, 2)
