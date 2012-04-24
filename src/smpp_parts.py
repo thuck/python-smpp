@@ -13,33 +13,36 @@ def smpp_values_validation(name, value):
         #if there is no validator, any value is possible
         return True
 
-def set_string_parameter(max_size, min_size, default_value, type_, name, self, value):
-    if value is None:
-        value = default_value
+class C_OctectString(object):
+    def __init__(self, parameter_name, min_size = 0, default_value = ''):
+        self.parameter_name = parameter_name
+        self.min_size = min_size
+        self.max_size = max_size
+        self.value = '%s00' % (default_value.encode('hex'))
 
-    value = value.encode('hex')
+    def __set__(self, value):
 
-    if len(value) > max_size - 2:
-        raise ValueError('Cannot exceed %s characters' % (max_size/2))
+     if len(value) > self.max_size - 2:
+            raise ValueError('Cannot exceed %s characters' % (max_size/2))
 
-    elif len(value) < min_size - 2:
-        raise ValueError('Cannot be less than %s characters' % (min_size/2))
+        elif len(value) < self.min_size - 2:
+            raise ValueError('Cannot be less than %s characters' % (min_size/2))
 
-    elif not smpp_values_validation(name, value):
-        raise ValueError('%s is not a valid value for %s' % (value, name))
+        elif not smpp_values_validation(self.parameter_name, value):
+            raise ValueError('%s is not a valid value for %s' % (value, self.parameter_name))
 
-    if type_ == 'c-octet_string':
-        setattr(self, name, '%s00' % (value))
+#        if type_ == 'c-octet_string':
+        self.value = '%s00' % (value.encode('hex'))
 
-    elif type_ == 'octet_string':
-        setattr(self, name, value)
+#        elif type_ == 'octet_string':
+#            setattr(self, name, value)
 
-    if name == '_short_message':
-        #this will update the short message size, for every change in the
-        #short message; any value is ignored
-        self.sm_length = 0 #hex(len(self._short_message)/2).replace('0x','').zfill(2)
+        if name == '_short_message':
+            #this will update the short message size, for every change in the
+            #short message; any value is ignored
+            self.sm_length = 0 #hex(len(self._short_message)/2).replace('0x','').zfill(2)
 
-    self.command_length = 0
+        self.command_length = 0
 
 
 def get_string_parameter(type_, name, self):
